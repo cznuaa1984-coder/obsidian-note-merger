@@ -1,0 +1,257 @@
+.note-merger-modal {
+  padding: 1rem;
+}
+
+.search-container {
+  margin-bottom: 1rem;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.note-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.note-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.note-item:last-child {
+  border-bottom: none;
+}
+
+.note-name {
+  font-weight: bold;
+}
+
+.note-path {
+  color: var(--text-muted);
+  font-size: 0.8em;
+  margin-left: 0.5rem;
+}
+
+.add-button {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.add-button:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.selected-container {
+  margin-bottom: 1rem;
+}
+
+.selected-list {
+  min-height: 100px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 0.5rem;
+}
+
+.selected-note-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  background: var(--background-secondary);
+  border-radius: 4px;
+  cursor: grab;
+}
+
+.selected-note-item.dragging {
+  opacity: 0.5;
+  background: var(--background-modifier-hover);
+}
+
+.drag-handle {
+  margin-right: 0.5rem;
+  color: var(--text-muted);
+  cursor: grab;
+}
+
+.remove-button {
+  margin-left: auto;
+  background: var(--background-modifier-error);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.remove-button:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.settings-container {
+  margin-bottom: 1rem;
+}
+
+.note-merger-modal .setting-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.note-merger-modal .setting-item label {
+  margin-right: 0.5rem;
+  min-width: 120px;
+}
+
+.name-input,
+.folder-input {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.delete-checkbox {
+  margin-right: 0.5rem;
+}
+
+.button-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.cancel-button,
+.merge-button,
+.confirm-button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cancel-button {
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.merge-button,
+.confirm-button {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.cancel-button:hover {
+  background: var(--background-modifier-hover);
+}
+
+.merge-button:hover,
+.confirm-button:hover {
+  background: var(--interactive-accent-hover);
+}
+
+/* 文件夹输入容器 */
+.folder-input-container {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.folder-input {
+  flex: 1;
+}
+
+.folder-select-button {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.folder-select-button:hover {
+  background: var(--interactive-accent-hover);
+}
+
+/* 文件夹选择器模态框 */
+.folder-suggester-modal {
+  padding: 1rem;
+}
+
+.folder-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.folder-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.folder-item:last-child {
+  border-bottom: none;
+}
+
+.folder-name {
+  font-weight: bold;
+}
+
+.folder-path {
+  color: var(--text-muted);
+  font-size: 0.8em;
+  margin-left: 0.5rem;
+}
+
+.select-button {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+.select-button:hover {
+  background: var(--interactive-accent-hover);
+}
+
+/* 设置页面按钮样式 - 仅限插件内部 */
+.note-merger-modal .setting-item .setting-item-control {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.note-merger-modal .setting-item .setting-item-name {
+  flex: 1;
+}
+
+/* 确保不影响Obsidian原生开关按钮 */
+.setting-item:has(.setting-item-control .checkbox-container) {
+  /* 不设置flex，让Obsidian原生样式生效 */
+}
