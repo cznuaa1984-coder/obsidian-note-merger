@@ -27,6 +27,7 @@ describe('YAML Frontmatter Parsing', () => {
   beforeEach(() => {
     plugin = new NoteMergerPlugin(new App(), {} as any);
     plugin.settings = {
+      language: 'zh',
       defaultFolder: '',
       separator: '---',
       autoDelete: false,

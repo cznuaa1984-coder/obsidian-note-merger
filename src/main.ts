@@ -1,6 +1,74 @@
 import { App, Modal, Notice, Plugin, TFile, TFolder, Vault, PluginSettingTab, Setting } from 'obsidian';
 
+type Language = 'zh' | 'en';
+
+interface Translations {
+  [key: string]: { zh: string; en: string };
+}
+
+const i18n: Translations = {
+  // Plugin
+  pluginName: { zh: 'Note Merger', en: 'Note Merger' },
+  commandName: { zh: '合并笔记', en: 'Merge Notes' },
+  contextMenu: { zh: 'Note Merge', en: 'Note Merge' },
+
+  // Modal
+  title: { zh: '合并笔记', en: 'Merge Notes' },
+  searchPlaceholder: { zh: '搜索笔记...', en: 'Search notes...' },
+  selectedTitle: { zh: '已选笔记（拖动排序）', en: 'Selected Notes (drag to reorder)' },
+  noteNameLabel: { zh: '合并后笔记名称：', en: 'Merged note name:' },
+  noteNamePlaceholder: { zh: '默认：第一个文件名_合并', en: 'Default: first filename_merged' },
+  targetFolderLabel: { zh: '目标文件夹：', en: 'Target folder:' },
+  targetFolderPlaceholder: { zh: '默认为当前文件夹', en: 'Default: current folder' },
+  selectFolder: { zh: '选择文件夹', en: 'Select folder' },
+  deleteSource: { zh: '合并后删除源笔记（不可撤销）', en: 'Delete source notes after merge (irreversible)' },
+  cancel: { zh: '取消', en: 'Cancel' },
+  merge: { zh: '合并', en: 'Merge' },
+  add: { zh: '+', en: '+' },
+  remove: { zh: '×', en: '×' },
+
+  // Folder Suggester
+  folderTitle: { zh: '选择文件夹', en: 'Select Folder' },
+  folderSearchPlaceholder: { zh: '搜索文件夹...', en: 'Search folders...' },
+  select: { zh: '选择', en: 'Select' },
+
+  // Confirm Modal
+  confirmTitle: { zh: '确认删除', en: 'Confirm Delete' },
+  confirmMessage: { zh: '确定要删除所有源笔记吗？此操作不可撤销。', en: 'Delete all source notes? This cannot be undone.' },
+  confirm: { zh: '确定', en: 'Confirm' },
+
+  // Notices
+  noNotesSelected: { zh: '请先选择要合并的笔记', en: 'Please select notes to merge' },
+  mergeSuccess: { zh: '已创建合并笔记：', en: 'Merged note created: ' },
+  deleteFailed: { zh: '删除失败：', en: 'Delete failed: ' },
+  allDeleted: { zh: '已删除所有源笔记', en: 'All source notes deleted' },
+  mergeFailed: { zh: '合并失败：', en: 'Merge failed: ' },
+
+  // Settings
+  settingsTitle: { zh: 'Note Merger 设置', en: 'Note Merger Settings' },
+  language: { zh: '语言', en: 'Language' },
+  languageDesc: { zh: '选择插件界面语言', en: 'Select plugin interface language' },
+  defaultFolder: { zh: '默认文件夹', en: 'Default Folder' },
+  defaultFolderDesc: { zh: '合并后笔记的默认存放文件夹', en: 'Default folder for merged notes' },
+  defaultFolderPlaceholder: { zh: '留空为当前文件夹', en: 'Leave empty for current folder' },
+  advancedSettings: { zh: '高级设置', en: 'Advanced Settings' },
+  advancedSettingsDesc: { zh: '配置分隔符、删除选项等', en: 'Configure separator, delete options, etc.' },
+  enter: { zh: '进入', en: 'Enter' },
+  advancedTitle: { zh: '高级设置', en: 'Advanced Settings' },
+  back: { zh: '返回', en: 'Back' },
+  backDesc: { zh: '返回基本设置', en: 'Back to basic settings' },
+  separator: { zh: '分隔符', en: 'Separator' },
+  separatorDesc: { zh: '合并笔记时使用的分隔符', en: 'Separator used when merging notes' },
+  autoDelete: { zh: '自动删除源笔记', en: 'Auto-delete source notes' },
+  autoDeleteDesc: { zh: '合并后自动删除源笔记（危险选项）', en: 'Auto-delete source notes after merge (dangerous)' },
+};
+
+function t(key: string, lang: Language): string {
+  return i18n[key]?.[lang] || i18n[key]?.['zh'] || key;
+}
+
 interface NoteMergerSettings {
+  language: Language;
   defaultFolder: string;
   separator: string;
   autoDelete: boolean;
@@ -8,6 +76,7 @@ interface NoteMergerSettings {
 }
 
 const DEFAULT_SETTINGS: NoteMergerSettings = {
+  language: 'zh',
   defaultFolder: '',
   separator: '---',
   autoDelete: false,
@@ -16,15 +85,60 @@ const DEFAULT_SETTINGS: NoteMergerSettings = {
 
 export default class NoteMergerPlugin extends Plugin {
   settings: NoteMergerSettings;
+  preSelectedFiles: TFile[] = [];
 
   async onload() {
     await this.loadSettings();
 
     this.addCommand({
       id: 'merge-notes',
-      name: '合并笔记',
+      name: t('commandName', this.settings.language),
       callback: () => new NoteMergerModal(this.app, this).open()
     });
+
+    // 右键菜单：将选中的文件添加到合并列表
+    this.registerEvent(
+      this.app.workspace.on('file-menu', (menu, file) => {
+        const filesToAdd: TFile[] = [];
+        const addedPaths = new Set<string>();
+
+        // 尝试从文件浏览器DOM获取所有选中的文件
+        const fileExplorer = this.app.workspace.getLeavesOfType('file-explorer')[0];
+        if (fileExplorer) {
+          const container = fileExplorer.view.containerEl;
+          // 查找所有选中的文件项
+          const selectedItems = container.querySelectorAll('.tree-item-self.is-selected');
+          selectedItems.forEach((item) => {
+            // 从DOM获取文件路径
+            const path = item.getAttribute('data-path');
+            if (path) {
+              const tfile = this.app.vault.getAbstractFileByPath(path);
+              if (tfile instanceof TFile && tfile.extension === 'md' && !addedPaths.has(path)) {
+                filesToAdd.push(tfile);
+                addedPaths.add(path);
+              }
+            }
+          });
+        }
+
+        // 如果DOM方式没有获取到，使用右键的单个文件
+        if (filesToAdd.length === 0 && file instanceof TFile && file.extension === 'md') {
+          filesToAdd.push(file);
+        }
+
+        if (filesToAdd.length > 0) {
+          menu.addItem((item) => {
+            item
+              .setTitle(t('contextMenu', this.settings.language))
+              .setIcon('file-input')
+              .onClick(() => {
+                this.preSelectedFiles = filesToAdd;
+                new NoteMergerModal(this.app, this).open();
+              });
+          });
+        }
+      })
+    );
 
     this.addSettingTab(new NoteMergerSettingTab(this.app, this));
   }
@@ -39,6 +153,10 @@ export default class NoteMergerPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+
+  t(key: string): string {
+    return t(key, this.settings.language);
   }
 }
 
@@ -62,13 +180,13 @@ export class NoteMergerModal extends Modal {
     contentEl.empty();
     contentEl.addClass('note-merger-modal');
 
-    contentEl.createEl('h2', { text: '合并笔记' });
+    contentEl.createEl('h2', { text: this.plugin.t('title') });
 
     // 搜索框
     const searchContainer = contentEl.createDiv({ cls: 'search-container' });
     this.searchInput = searchContainer.createEl('input', {
       type: 'text',
-      placeholder: '搜索笔记...',
+      placeholder: this.plugin.t('searchPlaceholder'),
       cls: 'search-input'
     });
     this.searchInput.addEventListener('input', () => this.searchNotes());
@@ -77,9 +195,20 @@ export class NoteMergerModal extends Modal {
     this.noteList = contentEl.createDiv({ cls: 'note-list' });
     this.loadAllNotes();
 
+    // 处理右键菜单预选的文件
+    if (this.plugin.preSelectedFiles.length > 0) {
+      for (const file of this.plugin.preSelectedFiles) {
+        if (!this.selectedNotes.includes(file)) {
+          this.selectedNotes.push(file);
+        }
+      }
+      this.plugin.preSelectedFiles = [];
+      this.updateMergedNoteName();
+    }
+
     // 已选笔记列表
     const selectedContainer = contentEl.createDiv({ cls: 'selected-container' });
-    selectedContainer.createEl('h3', { text: '已选笔记（拖动排序）' });
+    selectedContainer.createEl('h3', { text: this.plugin.t('selectedTitle') });
     const selectedList = selectedContainer.createDiv({ cls: 'selected-list' });
     this.renderSelectedNotes(selectedList);
 
@@ -88,31 +217,31 @@ export class NoteMergerModal extends Modal {
     
     // 合并后笔记名称
     const nameContainer = settingsContainer.createDiv({ cls: 'setting-item' });
-    nameContainer.createEl('label', { text: '合并后笔记名称：' });
+    nameContainer.createEl('label', { text: this.plugin.t('noteNameLabel') });
     this.mergedNoteName = nameContainer.createEl('input', {
       type: 'text',
-      placeholder: '默认使用第一篇笔记名称',
+      placeholder: this.plugin.t('noteNamePlaceholder'),
       cls: 'name-input'
     });
 
     // 目标文件夹
     const folderContainer = settingsContainer.createDiv({ cls: 'setting-item' });
-    folderContainer.createEl('label', { text: '目标文件夹：' });
+    folderContainer.createEl('label', { text: this.plugin.t('targetFolderLabel') });
     
     const folderInputContainer = folderContainer.createDiv({ cls: 'folder-input-container' });
     this.targetFolder = folderInputContainer.createEl('input', {
       type: 'text',
-      placeholder: '默认为当前文件夹',
+      placeholder: this.plugin.t('targetFolderPlaceholder'),
       value: this.plugin.settings.defaultFolder,
       cls: 'folder-input'
     });
     
     const folderSelectButton = folderInputContainer.createEl('button', { 
-      text: '选择文件夹', 
+      text: this.plugin.t('selectFolder'), 
       cls: 'folder-select-button' 
     });
     folderSelectButton.addEventListener('click', () => {
-      new FolderSuggesterModal(this.app, (folder) => {
+      new FolderSuggesterModal(this.app, this.plugin, (folder) => {
         this.targetFolder.value = folder.path;
       }).open();
     });
@@ -123,19 +252,18 @@ export class NoteMergerModal extends Modal {
       type: 'checkbox',
       cls: 'delete-checkbox'
     });
-    deleteContainer.createEl('label', { text: '合并后删除源笔记（不可撤销）' });
+    deleteContainer.createEl('label', { text: this.plugin.t('deleteSource') });
 
     // 按钮区域
     const buttonContainer = contentEl.createDiv({ cls: 'button-container' });
-    buttonContainer.createEl('button', { text: '取消', cls: 'cancel-button' })
+    buttonContainer.createEl('button', { text: this.plugin.t('cancel'), cls: 'cancel-button' })
       .addEventListener('click', () => this.close());
-    buttonContainer.createEl('button', { text: '合并', cls: 'merge-button' })
+    buttonContainer.createEl('button', { text: this.plugin.t('merge'), cls: 'merge-button' })
       .addEventListener('click', () => this.mergeNotes());
   }
 
   async loadAllNotes() {
     const files = this.app.vault.getMarkdownFiles();
-    // 按修改时间降序排序（最新的在前）
     this.notes = files.sort((a, b) => b.stat.mtime - a.stat.mtime);
     this.renderNoteList();
   }
@@ -163,7 +291,7 @@ export class NoteMergerModal extends Modal {
       noteItem.createEl('span', { text: note.name, cls: 'note-name' });
       noteItem.createEl('span', { text: note.path, cls: 'note-path' });
       
-      const addButton = noteItem.createEl('button', { text: '+', cls: 'add-button' });
+      const addButton = noteItem.createEl('button', { text: this.plugin.t('add'), cls: 'add-button' });
       addButton.addEventListener('click', () => this.addNote(note));
     });
   }
@@ -198,7 +326,7 @@ export class NoteMergerModal extends Modal {
       const dragHandle = noteItem.createEl('span', { text: '⋮', cls: 'drag-handle' });
       noteItem.createEl('span', { text: note.name, cls: 'note-name' });
       
-      const removeButton = noteItem.createEl('button', { text: '×', cls: 'remove-button' });
+      const removeButton = noteItem.createEl('button', { text: this.plugin.t('remove'), cls: 'remove-button' });
       removeButton.addEventListener('click', () => this.removeNote(note));
       
       // 拖动排序
@@ -232,7 +360,7 @@ export class NoteMergerModal extends Modal {
 
   updateMergedNoteName() {
     if (!this.mergedNoteName.value && this.selectedNotes.length > 0) {
-      this.mergedNoteName.placeholder = this.selectedNotes[0].name;
+      this.mergedNoteName.placeholder = this.selectedNotes[0].name + '_合并';
     }
   }
 
@@ -247,7 +375,6 @@ export class NoteMergerModal extends Modal {
     const yamlContent = match[1];
     const body = match[2];
     
-    // 简单的YAML解析
     const frontmatter: any = {};
     const lines = yamlContent.split('\n');
     
@@ -257,7 +384,6 @@ export class NoteMergerModal extends Modal {
         const key = line.substring(0, colonIndex).trim();
         const value = line.substring(colonIndex + 1).trim();
         
-        // 处理数组格式的值，如 tags: [tag1, tag2]
         if (value.startsWith('[') && value.endsWith(']')) {
           const arrayContent = value.slice(1, -1);
           frontmatter[key] = arrayContent.split(',').map(item => item.trim());
@@ -274,7 +400,6 @@ export class NoteMergerModal extends Modal {
     const merged: any = {};
     const allTags: string[] = [];
     
-    // 收集所有tags并去重
     for (const frontmatter of frontmatters) {
       if (frontmatter && frontmatter.tags) {
         if (Array.isArray(frontmatter.tags)) {
@@ -285,10 +410,8 @@ export class NoteMergerModal extends Modal {
       }
     }
     
-    // 去重tags
     const uniqueTags = [...new Set(allTags)];
     
-    // 找到第一个有title的frontmatter
     let titleFound = false;
     for (const frontmatter of frontmatters) {
       if (frontmatter && frontmatter.title) {
@@ -298,17 +421,14 @@ export class NoteMergerModal extends Modal {
       }
     }
     
-    // 如果没有找到title，使用第一个frontmatter（即使没有title）
     if (!titleFound && frontmatters.length > 0 && frontmatters[0]) {
       Object.assign(merged, frontmatters[0]);
     }
     
-    // 设置合并后的tags
     if (uniqueTags.length > 0) {
       merged.tags = uniqueTags;
     }
     
-    // 设置修改时间为当前时间
     merged.date = new Date().toISOString().split('T')[0];
     
     return merged;
@@ -334,14 +454,13 @@ export class NoteMergerModal extends Modal {
 
   async mergeNotes() {
     if (this.selectedNotes.length === 0) {
-      new Notice('请先选择要合并的笔记');
+      new Notice(this.plugin.t('noNotesSelected'));
       return;
     }
 
-    const mergedName = this.mergedNoteName.value || this.selectedNotes[0].name;
+    const mergedName = this.mergedNoteName.value || this.selectedNotes[0].name + '_合并';
     const targetPath = this.targetFolder.value;
     
-    // 解析所有笔记的YAML frontmatter和内容
     const frontmatters: any[] = [];
     const bodies: string[] = [];
     
@@ -354,10 +473,8 @@ export class NoteMergerModal extends Modal {
       bodies.push(body);
     }
     
-    // 合并YAML frontmatter
     const mergedFrontmatter = this.mergeYamlFrontmatter(frontmatters);
     
-    // 合并内容
     let mergedBody = '';
     for (let i = 0; i < bodies.length; i++) {
       mergedBody += bodies[i].trim();
@@ -366,27 +483,22 @@ export class NoteMergerModal extends Modal {
       }
     }
     
-    // 组合最终内容
     const frontmatterString = this.frontmatterToString(mergedFrontmatter);
     const content = frontmatterString + mergedBody;
 
-    // 确定目标路径
     let finalPath = mergedName;
     if (targetPath) {
       finalPath = targetPath + '/' + mergedName;
     }
     
-    // 确保文件名以.md结尾
     if (!finalPath.endsWith('.md')) {
       finalPath += '.md';
     }
 
-    // 创建合并后的笔记
     try {
       await this.app.vault.create(finalPath, content);
-      new Notice(`已创建合并笔记：${finalPath}`);
+      new Notice(this.plugin.t('mergeSuccess') + finalPath);
       
-      // 删除源笔记
       if (this.deleteCheckbox.checked) {
         const confirmed = await this.confirmDelete();
         if (confirmed) {
@@ -394,16 +506,16 @@ export class NoteMergerModal extends Modal {
             try {
               await this.app.vault.delete(file);
             } catch (error) {
-              new Notice(`删除失败：${file.name}`);
+              new Notice(this.plugin.t('deleteFailed') + file.name);
             }
           }
-          new Notice('已删除所有源笔记');
+          new Notice(this.plugin.t('allDeleted'));
         }
       }
       
       this.close();
     } catch (error) {
-      new Notice('合并失败：' + error.message);
+      new Notice(this.plugin.t('mergeFailed') + error.message);
     }
   }
 
@@ -411,8 +523,9 @@ export class NoteMergerModal extends Modal {
     return new Promise(resolve => {
       const modal = new ConfirmModal(
         this.app,
-        '确认删除',
-        '确定要删除所有源笔记吗？此操作不可撤销。',
+        this.plugin,
+        this.plugin.t('confirmTitle'),
+        this.plugin.t('confirmMessage'),
         resolve
       );
       modal.open();
@@ -426,12 +539,14 @@ export class NoteMergerModal extends Modal {
 }
 
 class ConfirmModal extends Modal {
-  title: string;
-  message: string;
-  callback: (result: boolean) => void;
+  private title: string;
+  private message: string;
+  private callback: (result: boolean) => void;
+  private plugin: NoteMergerPlugin;
 
-  constructor(app: App, title: string, message: string, callback: (result: boolean) => void) {
+  constructor(app: App, plugin: NoteMergerPlugin, title: string, message: string, callback: (result: boolean) => void) {
     super(app);
+    this.plugin = plugin;
     this.title = title;
     this.message = message;
     this.callback = callback;
@@ -445,12 +560,12 @@ class ConfirmModal extends Modal {
     contentEl.createEl('p', { text: this.message });
     
     const buttonContainer = contentEl.createDiv({ cls: 'button-container' });
-    buttonContainer.createEl('button', { text: '取消', cls: 'cancel-button' })
+    buttonContainer.createEl('button', { text: this.plugin.t('cancel'), cls: 'cancel-button' })
       .addEventListener('click', () => {
         this.callback(false);
         this.close();
       });
-    buttonContainer.createEl('button', { text: '确定', cls: 'confirm-button' })
+    buttonContainer.createEl('button', { text: this.plugin.t('confirm'), cls: 'confirm-button' })
       .addEventListener('click', () => {
         this.callback(true);
         this.close();
@@ -473,26 +588,43 @@ class NoteMergerSettingTab extends PluginSettingTab {
 
   display(): void {
     const { containerEl } = this;
+    const lang = this.plugin.settings.language;
     containerEl.empty();
 
-    containerEl.createEl('h2', { text: 'Note Merger 设置' });
+    containerEl.createEl('h2', { text: this.plugin.t('settingsTitle') });
 
+    // 语言设置
     new Setting(containerEl)
-      .setName('默认文件夹')
-      .setDesc('合并后笔记的默认存放文件夹')
+      .setName(this.plugin.t('language'))
+      .setDesc(this.plugin.t('languageDesc'))
+      .addDropdown((dropdown: any) => dropdown
+        .addOption('zh', '中文')
+        .addOption('en', 'English')
+        .setValue(lang)
+        .onChange(async (value: Language) => {
+          this.plugin.settings.language = value;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+
+    // 默认文件夹
+    new Setting(containerEl)
+      .setName(this.plugin.t('defaultFolder'))
+      .setDesc(this.plugin.t('defaultFolderDesc'))
       .addText((text: any) => text
-        .setPlaceholder('留空为当前文件夹')
+        .setPlaceholder(this.plugin.t('defaultFolderPlaceholder'))
         .setValue(this.plugin.settings.defaultFolder)
         .onChange(async (value: string) => {
           this.plugin.settings.defaultFolder = value;
           await this.plugin.saveSettings();
         }));
 
+    // 高级设置入口
     new Setting(containerEl)
-      .setName('高级设置')
-      .setDesc('配置分隔符、删除选项等')
+      .setName(this.plugin.t('advancedSettings'))
+      .setDesc(this.plugin.t('advancedSettingsDesc'))
       .addButton((button: any) => button
-        .setButtonText('进入')
+        .setButtonText(this.plugin.t('enter'))
         .setCta()
         .onClick(() => {
           this.displayAdvanced();
@@ -503,22 +635,23 @@ class NoteMergerSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl('h2', { text: '高级设置' });
+    containerEl.createEl('h2', { text: this.plugin.t('advancedTitle') });
 
     // 返回按钮
     new Setting(containerEl)
-      .setName('返回')
-      .setDesc('返回基本设置')
+      .setName(this.plugin.t('back'))
+      .setDesc(this.plugin.t('backDesc'))
       .addButton((button: any) => button
-        .setButtonText('返回')
+        .setButtonText(this.plugin.t('back'))
         .setCta()
         .onClick(() => {
           this.display();
         }));
 
+    // 分隔符
     new Setting(containerEl)
-      .setName('分隔符')
-      .setDesc('合并笔记时使用的分隔符')
+      .setName(this.plugin.t('separator'))
+      .setDesc(this.plugin.t('separatorDesc'))
       .addText((text: any) => text
         .setValue(this.plugin.settings.separator)
         .onChange(async (value: string) => {
@@ -526,9 +659,10 @@ class NoteMergerSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    // 自动删除
     new Setting(containerEl)
-      .setName('自动删除源笔记')
-      .setDesc('合并后自动删除源笔记（危险选项）')
+      .setName(this.plugin.t('autoDelete'))
+      .setDesc(this.plugin.t('autoDeleteDesc'))
       .addToggle((toggle: any) => toggle
         .setValue(this.plugin.settings.autoDelete)
         .onChange(async (value: boolean) => {
@@ -543,9 +677,11 @@ class FolderSuggesterModal extends Modal {
   private callback: (folder: TFolder) => void;
   private searchInput: HTMLInputElement;
   private folderList: HTMLElement;
+  private plugin: NoteMergerPlugin;
 
-  constructor(app: App, callback: (folder: TFolder) => void) {
+  constructor(app: App, plugin: NoteMergerPlugin, callback: (folder: TFolder) => void) {
     super(app);
+    this.plugin = plugin;
     this.callback = callback;
     this.folders = this.getAllFolders();
   }
@@ -555,13 +691,13 @@ class FolderSuggesterModal extends Modal {
     contentEl.empty();
     contentEl.addClass('folder-suggester-modal');
 
-    contentEl.createEl('h2', { text: '选择文件夹' });
+    contentEl.createEl('h2', { text: this.plugin.t('folderTitle') });
 
     // 搜索框
     const searchContainer = contentEl.createDiv({ cls: 'search-container' });
     this.searchInput = searchContainer.createEl('input', {
       type: 'text',
-      placeholder: '搜索文件夹...',
+      placeholder: this.plugin.t('folderSearchPlaceholder'),
       cls: 'search-input'
     });
     this.searchInput.addEventListener('input', () => this.searchFolders());
@@ -572,7 +708,7 @@ class FolderSuggesterModal extends Modal {
 
     // 取消按钮
     const buttonContainer = contentEl.createDiv({ cls: 'button-container' });
-    buttonContainer.createEl('button', { text: '取消', cls: 'cancel-button' })
+    buttonContainer.createEl('button', { text: this.plugin.t('cancel'), cls: 'cancel-button' })
       .addEventListener('click', () => this.close());
   }
 
@@ -616,7 +752,7 @@ class FolderSuggesterModal extends Modal {
       folderItem.createEl('span', { text: folder.name, cls: 'folder-name' });
       folderItem.createEl('span', { text: folder.path, cls: 'folder-path' });
       
-      const selectButton = folderItem.createEl('button', { text: '选择', cls: 'select-button' });
+      const selectButton = folderItem.createEl('button', { text: this.plugin.t('select'), cls: 'select-button' });
       selectButton.addEventListener('click', () => {
         this.callback(folder);
         this.close();

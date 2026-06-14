@@ -11,11 +11,17 @@ jest.mock('obsidian', () => {
       settings: any = {};
       addCommand = jest.fn();
       addSettingTab = jest.fn();
+      registerEvent = jest.fn();
       loadData = jest.fn().mockResolvedValue({});
       saveData = jest.fn().mockResolvedValue(undefined);
       
       constructor(app?: any, manifest?: any) {
-        this.app = app || {};
+        this.app = app || {
+          workspace: {
+            on: jest.fn(),
+            getLeavesOfType: jest.fn().mockReturnValue([])
+          }
+        };
       }
     }
   };
@@ -26,9 +32,15 @@ describe('NoteMergerPlugin', () => {
 
   beforeEach(() => {
     plugin = new NoteMergerPlugin(new App(), {} as any);
-    plugin.app = new App();
+    plugin.app = {
+      workspace: {
+        on: jest.fn(),
+        getLeavesOfType: jest.fn().mockReturnValue([])
+      }
+    } as any;
     // Initialize settings manually for testing
     plugin.settings = {
+      language: 'zh',
       defaultFolder: '',
       separator: '---',
       autoDelete: false,
